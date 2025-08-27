@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Phase, Task, TaskStatus, Photo, LogEntry } from './types';
 import { INITIAL_PROJECT_PHASES } from './constants';
 import Header from './components/Header';
@@ -8,25 +9,16 @@ import PhotoModal from './components/PhotoModal';
 import GoogleDriveModal from './components/GoogleDriveModal';
 import AdminLoginModal from './components/AdminLoginModal';
 import ActivityLog from './components/ActivityLog';
-
-const LOCAL_STORAGE_KEY = 'construction-tracker-data';
-
-const loadStateFromLocalStorage = () => {
-  try {
-    const serializedState = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (serializedState === null) return undefined;
-    return JSON.parse(serializedState);
-  } catch (error) {
-    console.error("Could not load state from localStorage", error);
-    return undefined;
-  }
-};
+import FeatureNotice from './components/FeatureNotice';
 
 const App: React.FC = () => {
-  const [projectName, setProjectName] = useState<string>(() => loadStateFromLocalStorage()?.projectName || 'Acompanhamento de Obra');
-  const [phases, setPhases] = useState<Phase[]>(() => loadStateFromLocalStorage()?.phases || INITIAL_PROJECT_PHASES);
-  const [logs, setLogs] = useState<LogEntry[]>(() => loadStateFromLocalStorage()?.logs || []);
-  const [driveFolderPath, setDriveFolderPath] = useState<string>(() => loadStateFromLocalStorage()?.driveFolderPath || 'Minha Obra/Fotos');
+  const [projectName, setProjectName] = useState<string>('Acompanhamento de Obra');
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [driveFolderPath, setDriveFolderPath] = useState<string>('Minha Obra/Fotos');
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [viewingPhoto, setViewingPhoto] = useState<Photo | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<number | null>(null);
@@ -35,248 +27,323 @@ const App: React.FC = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  const totalTasks = useMemo(() => phases.reduce((acc, phase) => acc + phase.tasks.length, 0), [phases]);
-  const completedTasks = useMemo(() => phases.flatMap(p => p.tasks).filter(t => t.status === TaskStatus.Completed).length, [phases]);
-  const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  
+  useEffect(() => {
+    const fetchData = async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch('/api/get-data', { cache: 'no-store' });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response from server.' }));
+                throw new Error(errorData.error || 'Falha ao buscar os dados do projeto.');
+            }
+            const data = await response.json();
+            setProjectName(data.projectName || 'Acompanhamento de Obra');
+            setPhases(data.phases || INITIAL_PROJECT_PHASES);
+            setLogs(data.logs || []);
+            setDriveFolderPath(data.driveFolderPath || 'Minha Obra/Fotos');
+        } catch (err: any) {
+            setError(err.message);
+            console.error(err);
+            setPhases(INITIAL_PROJECT_PHASES);
+            setLogs([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    fetchData();
+  }, []);
+
   const addLog = useCallback((message: string) => {
     const newLog: LogEntry = {
-        id: self.crypto.randomUUID(),
+        id: crypto.randomUUID(),
         timestamp: new Date().toLocaleString('pt-BR'),
         message,
     };
-    setLogs(currentLogs => [newLog, ...currentLogs]);
+    setLogs(prevLogs => [newLog, ...prevLogs]);
   }, []);
 
-  const handleProjectNameChange = useCallback((newName: string) => {
-    if (newName !== projectName) {
-        addLog(`Nome do projeto alterado para: "${newName}"`);
-        setProjectName(newName);
-    }
-  }, [projectName, addLog]);
+  const totalProgress = useMemo(() => {
+    const allTasks = phases.flatMap(p => p.tasks);
+    if (allTasks.length === 0) return 0;
+    const completedTasks = allTasks.filter(t => t.status === TaskStatus.Completed).length;
+    return Math.round((completedTasks / allTasks.length) * 100);
+  }, [phases]);
 
-  const updateTask = useCallback((taskId: number, updates: Partial<Task>) => {
+  const handleSave = useCallback(async () => {
+    setSaveStatus('saving');
+    setError(null);
+    try {
+        const fullState = {
+            projectName,
+            phases,
+            logs,
+            driveFolderPath
+        };
+        const response = await fetch('/api/save-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fullState),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response.' }));
+            throw new Error(errorData.error || 'Falha ao salvar o progresso.');
+        }
+        
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+
+    } catch (err: any) {
+        setError(err.message);
+        setSaveStatus('idle');
+    }
+  }, [projectName, phases, logs, driveFolderPath]);
+  
+  const handleReset = useCallback(async () => {
+    if (window.confirm("Tem certeza que deseja reiniciar todo o progresso? Esta ação não pode ser desfeita.")) {
+        const initialData = {
+            projectName: 'Acompanhamento de Obra',
+            phases: INITIAL_PROJECT_PHASES,
+            logs: [{
+                id: crypto.randomUUID(),
+                timestamp: new Date().toLocaleString('pt-BR'),
+                message: 'Projeto reiniciado para o estado inicial.',
+            }],
+            driveFolderPath: 'Minha Obra/Fotos'
+        };
+        
+        setSaveStatus('saving');
+        setError(null);
+        try {
+            const response = await fetch('/api/save-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(initialData),
+            });
+
+            if (!response.ok) {
+                throw new Error('Falha ao reiniciar o projeto.');
+            }
+            
+            setProjectName(initialData.projectName);
+            setPhases(initialData.phases);
+            setLogs(initialData.logs);
+            setDriveFolderPath(initialData.driveFolderPath);
+            addLog('Progresso reiniciado para o estado inicial.');
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (err: any) {
+            setError(err.message);
+            setSaveStatus('idle');
+        }
+    }
+  }, [addLog]);
+
+  const updateTask = useCallback((taskId: number, updateFn: (task: Task) => Task) => {
     setPhases(currentPhases =>
-      currentPhases.map(phase => ({
-        ...phase,
-        tasks: phase.tasks.map(task =>
-          task.id === taskId ? { ...task, ...updates } : task
-        ),
-      }))
+        currentPhases.map(phase => ({
+            ...phase,
+            tasks: phase.tasks.map(task =>
+                task.id === taskId ? updateFn(task) : task
+            ),
+        }))
     );
   }, []);
-  
-  const handleToggleComplete = useCallback((taskId: number) => {
-    const task = phases.flatMap(p => p.tasks).find(t => t.id === taskId);
-    if (!task) return;
 
-    const newStatus = task.status === TaskStatus.Completed ? TaskStatus.InProgress : TaskStatus.Completed;
-    updateTask(taskId, { 
-      status: newStatus, 
-      lastUpdated: new Date().toLocaleString('pt-BR') 
+  const handleToggleComplete = useCallback((taskId: number) => {
+    let taskName = '';
+    let newStatus: TaskStatus | '' = '';
+
+    updateTask(taskId, task => {
+        taskName = task.name;
+        const isCompleted = task.status === TaskStatus.Completed;
+        newStatus = isCompleted ? TaskStatus.Pending : TaskStatus.Completed;
+        return {
+            ...task,
+            status: newStatus,
+            lastUpdated: new Date().toLocaleString('pt-BR'),
+        };
     });
-    addLog(`Tarefa "${task.name}" marcada como ${newStatus}.`);
-  }, [phases, updateTask, addLog]);
+    
+    if (taskName && newStatus) {
+        addLog(`Tarefa "${taskName}" marcada como ${newStatus}.`);
+    }
+  }, [updateTask, addLog]);
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
     });
   };
-
+    
   const handlePhotoUpload = useCallback(async (taskId: number, files: FileList) => {
-    const currentTask = phases.flatMap(p => p.tasks).find(t => t.id === taskId);
-    if (!currentTask) return;
+    if (!files) return;
+    
+    const taskName = phases.flatMap(p => p.tasks).find(t => t.id === taskId)?.name || `Tarefa ${taskId}`;
 
-    try {
-        const base64Promises = Array.from(files).map(fileToBase64);
-        const base64Urls = await Promise.all(base64Promises);
-
-        const newPhotos: Photo[] = base64Urls.map(url => ({
-            id: self.crypto.randomUUID(),
-            url: url,
-            comment: ''
+    for (const file of Array.from(files)) {
+        const base64Url = await fileToBase64(file);
+        const newPhoto: Photo = {
+            id: crypto.randomUUID(),
+            url: base64Url,
+            comment: '',
+        };
+        updateTask(taskId, task => ({
+            ...task,
+            images: [...task.images, newPhoto],
         }));
-
-        updateTask(taskId, {
-            images: [...currentTask.images, ...newPhotos],
-            status: TaskStatus.InProgress,
-            lastUpdated: new Date().toLocaleString('pt-BR'),
-        });
-        addLog(`${files.length} foto(s) adicionada(s) à tarefa "${currentTask.name}".`);
-    } catch (error) {
-        console.error("Error converting files to base64", error);
-        addLog(`Falha ao processar as fotos.`);
     }
-  }, [updateTask, phases, addLog]);
-  
+    addLog(`${files.length} foto(s) adicionada(s) à tarefa "${taskName}".`);
+  }, [updateTask, addLog, phases]);
+
   const handleDeletePhoto = useCallback((taskId: number, photoId: string) => {
-      const task = phases.flatMap(p => p.tasks).find(t => t.id === taskId);
-      if (!task) return;
-      
-      const updatedImages = task.images.filter(p => p.id !== photoId);
-      updateTask(taskId, { images: updatedImages });
-      addLog(`Foto removida da tarefa "${task.name}".`);
-  }, [phases, updateTask, addLog]);
+    updateTask(taskId, task => ({
+        ...task,
+        images: task.images.filter(p => p.id !== photoId),
+    }));
+    addLog('Foto removida da tarefa.');
+  }, [updateTask, addLog]);
 
-  const handleUpdatePhotoComment = useCallback((photoId: string, comment: string) => {
-      if(!currentTaskId) return;
+  const handleCommentChange = useCallback((photoId: string, comment: string) => {
+    setPhases(currentPhases =>
+        currentPhases.map(phase => ({
+            ...phase,
+            tasks: phase.tasks.map(task => ({
+                ...task,
+                images: task.images.map(photo =>
+                    photo.id === photoId ? { ...photo, comment } : photo
+                ),
+            })),
+        }))
+    );
+    addLog('Comentário da foto atualizado.');
+  }, [addLog]);
 
-      const task = phases.flatMap(p => p.tasks).find(t => t.id === currentTaskId);
-      if (!task) return;
-
-      const updatedImages = task.images.map(p => p.id === photoId ? {...p, comment} : p);
-      updateTask(currentTaskId, { images: updatedImages });
-      
-      if(viewingPhoto?.id === photoId) {
-        setViewingPhoto(prev => prev ? {...prev, comment} : null);
-      }
-      addLog(`Comentário em foto da tarefa "${task.name}" atualizado.`);
-  }, [currentTaskId, phases, updateTask, viewingPhoto, addLog]);
+  const handleUpdateDate = useCallback((phaseId: number, newDate: string) => {
+    const phaseName = phases.find(p => p.id === phaseId)?.name || `Fase ${phaseId}`;
+    setPhases(currentPhases =>
+        currentPhases.map(phase =>
+            phase.id === phaseId ? { ...phase, deliveryDate: newDate } : phase
+        )
+    );
+    addLog(`Data de entrega da fase "${phaseName}" atualizada para ${newDate}.`);
+  }, [addLog, phases]);
 
   const handleViewImage = useCallback((photo: Photo, taskId: number) => {
     setViewingPhoto(photo);
     setCurrentTaskId(taskId);
   }, []);
 
-  const handleCloseModal = useCallback(() => {
-    setViewingPhoto(null);
-    setCurrentTaskId(null);
-  }, []);
-
-  const handleUpdatePhaseDate = useCallback((phaseId: number, newDate: string) => {
-    setPhases(currentPhases => {
-        const phaseToUpdate = currentPhases.find(p => p.id === phaseId);
-        if (phaseToUpdate && phaseToUpdate.deliveryDate !== newDate) {
-            addLog(`Data de entrega da fase "${phaseToUpdate.name}" alterada para ${newDate}.`);
-            return currentPhases.map(phase => 
-                phase.id === phaseId ? { ...phase, deliveryDate: newDate } : phase
-            );
-        }
-        return currentPhases;
-    });
-  }, [addLog]);
-  
-  const handleSaveDrivePath = useCallback((path: string) => {
-    setDriveFolderPath(path);
-    setIsDriveModalOpen(false);
-    addLog(`Caminho do Google Drive atualizado para: "${path}"`);
-  }, [addLog]);
-
-  const handleAdminToggle = () => {
+  const handleAdminModeToggle = () => {
     if (isAdminMode) {
-      setIsAdminMode(false);
+        setIsAdminMode(false);
     } else {
-      setIsLoginModalOpen(true);
+        setIsLoginModalOpen(true);
     }
   };
-
+    
   const handleLoginSuccess = () => {
     setIsAdminMode(true);
     setIsLoginModalOpen(false);
-    addLog('Modo Administrador ativado.');
+    addLog('Modo administrador ativado.');
+  };
+    
+  const handleDrivePathSave = (newPath: string) => {
+    setDriveFolderPath(newPath);
+    setIsDriveModalOpen(false);
+    addLog(`Caminho do Google Drive atualizado para: ${newPath}`);
   };
 
-  const handleDeleteLog = useCallback((logId: string) => {
-    setLogs(currentLogs => currentLogs.filter(log => log.id !== logId));
-  }, []);
-
-  const handleSave = useCallback(() => {
-    setSaveStatus('saving');
-    try {
-        const stateToSave = {
-            projectName,
-            phases,
-            logs,
-            driveFolderPath,
-        };
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
-        addLog('Progresso salvo localmente no navegador.');
-        setTimeout(() => {
-            setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 2000);
-        }, 500);
-    } catch (error) {
-        console.error("Failed to save state to localStorage", error);
-        addLog('Erro ao salvar o progresso.');
-        setSaveStatus('idle');
-    }
-  }, [projectName, phases, logs, driveFolderPath, addLog]);
-
-  const handleReset = useCallback(() => {
-    if (window.confirm('Tem certeza que deseja apagar todos os dados salvos e reiniciar o projeto? Esta ação não pode ser desfeita.')) {
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
-        setProjectName('Acompanhamento de Obra');
-        setPhases(INITIAL_PROJECT_PHASES);
-        setLogs([]);
-        setDriveFolderPath('Minha Obra/Fotos');
-        addLog('Projeto reiniciado para o estado original.');
-    }
-  }, [addLog]);
+  if (isLoading) {
+    return (
+        <div className="flex items-center justify-center h-screen bg-slate-50">
+            <div className="text-center">
+                <p className="text-lg font-semibold text-slate-700">Carregando dados do projeto...</p>
+                <p className="text-sm text-slate-500">Por favor, aguarde.</p>
+            </div>
+        </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
-      <Header 
-        projectName={projectName}
-        onProjectNameChange={handleProjectNameChange}
-        isAdminMode={isAdminMode}
-        onAdminModeToggle={handleAdminToggle}
-        onConnectDrive={() => setIsDriveModalOpen(true)}
-        onSave={handleSave}
-        onReset={handleReset}
-        saveStatus={saveStatus}
-      />
-      <main className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold text-slate-700 mb-2">Progresso Geral da Obra</h2>
-          <p className="text-slate-500 mb-4">Acompanhe a evolução do projeto em tempo real.</p>
-          <ProgressBar progress={overallProgress} />
-        </div>
-        
-        <ActivityLog 
-            logs={logs}
+    <div className="min-h-screen bg-slate-100 font-sans">
+        <Header 
+            projectName={projectName}
+            onProjectNameChange={(name) => {
+                setProjectName(name);
+                addLog(`Nome do projeto alterado para "${name}".`);
+            }}
             isAdminMode={isAdminMode}
-            onDeleteLog={handleDeleteLog}
+            onAdminModeToggle={handleAdminModeToggle}
+            onConnectDrive={() => setIsDriveModalOpen(true)}
+            onSave={handleSave}
+            onReset={handleReset}
+            saveStatus={saveStatus}
         />
+
+        <main className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            {error && (
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded-md shadow" role="alert">
+                    <p className="font-bold">Ocorreu um erro</p>
+                    <p>{error}</p>
+                </div>
+            )}
+            
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <ProgressBar progress={totalProgress} />
+            </div>
+            
+            <div className="space-y-6">
+                {phases.map(phase => (
+                    <PhaseAccordion
+                        key={phase.id}
+                        phase={phase}
+                        isAdminMode={isAdminMode}
+                        onToggleComplete={handleToggleComplete}
+                        onPhotoUpload={handlePhotoUpload}
+                        onViewImage={handleViewImage}
+                        onDeletePhoto={handleDeletePhoto}
+                        onUpdateDate={handleUpdateDate}
+                    />
+                ))}
+            </div>
+
+            <div className="mt-8">
+                <ActivityLog logs={logs} isAdminMode={isAdminMode} onDeleteLog={(logId) => setLogs(logs.filter(l => l.id !== logId))} />
+            </div>
+
+            <div className="mt-8">
+                <FeatureNotice />
+            </div>
+        </main>
         
-        <div className="space-y-4">
-          {phases.map((phase) => (
-            <PhaseAccordion
-              key={phase.id}
-              phase={phase}
-              onToggleComplete={handleToggleComplete}
-              onPhotoUpload={handlePhotoUpload}
-              onViewImage={handleViewImage}
-              onDeletePhoto={handleDeletePhoto}
-              onUpdateDate={handleUpdatePhaseDate}
-              isAdminMode={isAdminMode}
+        {viewingPhoto && currentTaskId !== null && (
+            <PhotoModal 
+                photo={viewingPhoto} 
+                onClose={() => setViewingPhoto(null)}
+                onCommentChange={handleCommentChange}
             />
-          ))}
-        </div>
-      </main>
-      {viewingPhoto && (
-        <PhotoModal 
-          photo={viewingPhoto} 
-          onClose={handleCloseModal}
-          onCommentChange={handleUpdatePhotoComment}
-        />
-      )}
-      {isDriveModalOpen && (
-        <GoogleDriveModal 
-            currentPath={driveFolderPath}
-            onClose={() => setIsDriveModalOpen(false)}
-            onSave={handleSaveDrivePath}
-        />
-      )}
-      {isLoginModalOpen && (
-        <AdminLoginModal 
-            onClose={() => setIsLoginModalOpen(false)}
-            onLoginSuccess={handleLoginSuccess}
-        />
-      )}
+        )}
+
+        {isDriveModalOpen && (
+            <GoogleDriveModal 
+                currentPath={driveFolderPath}
+                onClose={() => setIsDriveModalOpen(false)}
+                onSave={handleDrivePathSave}
+            />
+        )}
+        
+        {isLoginModalOpen && (
+            <AdminLoginModal
+                onClose={() => setIsLoginModalOpen(false)}
+                onLoginSuccess={handleLoginSuccess}
+            />
+        )}
     </div>
   );
 };
