@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Phase, Task, TaskStatus, Photo } from './types';
+import { Phase, Task, TaskStatus, Photo, LogEntry } from './types';
 import { INITIAL_PROJECT_PHASES } from './constants';
 import Header from './components/Header';
 import ProgressBar from './components/ProgressBar';
 import PhaseAccordion from './components/PhaseAccordion';
 import PhotoModal from './components/PhotoModal';
-import FeatureNotice from './components/FeatureNotice';
 import GoogleDriveModal from './components/GoogleDriveModal';
+import AdminLoginModal from './components/AdminLoginModal';
+import ActivityLog from './components/ActivityLog';
 
 const App: React.FC = () => {
   const [projectName, setProjectName] = useState<string>('Acompanhamento de Obra');
@@ -17,11 +18,29 @@ const App: React.FC = () => {
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState<boolean>(false);
   const [driveFolderPath, setDriveFolderPath] = useState<string>('Minha Obra/Fotos');
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
 
   const totalTasks = useMemo(() => phases.reduce((acc, phase) => acc + phase.tasks.length, 0), [phases]);
   const completedTasks = useMemo(() => phases.flatMap(p => p.tasks).filter(t => t.status === TaskStatus.Completed).length, [phases]);
   const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  
+  const addLog = useCallback((message: string) => {
+    const newLog: LogEntry = {
+        id: self.crypto.randomUUID(),
+        timestamp: new Date().toLocaleString('pt-BR'),
+        message,
+    };
+    setLogs(currentLogs => [newLog, ...currentLogs]);
+  }, []);
+
+  const handleProjectNameChange = useCallback((newName: string) => {
+    if (newName !== projectName) {
+        addLog(`Nome do projeto alterado para: "${newName}"`);
+        setProjectName(newName);
+    }
+  }, [projectName, addLog]);
 
   const updateTask = useCallback((taskId: number, updates: Partial<Task>) => {
     setPhases(currentPhases =>
@@ -43,7 +62,8 @@ const App: React.FC = () => {
       status: newStatus, 
       lastUpdated: new Date().toLocaleString('pt-BR') 
     });
-  }, [phases, updateTask]);
+    addLog(`Tarefa "${task.name}" marcada como ${newStatus}.`);
+  }, [phases, updateTask, addLog]);
 
   const handlePhotoUpload = useCallback((taskId: number, files: FileList) => {
     const currentTask = phases.flatMap(p => p.tasks).find(t => t.id === taskId);
@@ -60,7 +80,8 @@ const App: React.FC = () => {
       status: TaskStatus.InProgress,
       lastUpdated: new Date().toLocaleString('pt-BR'),
     });
-  }, [updateTask, phases]);
+    addLog(`${files.length} foto(s) adicionada(s) à tarefa "${currentTask.name}".`);
+  }, [updateTask, phases, addLog]);
   
   const handleDeletePhoto = useCallback((taskId: number, photoId: string) => {
       const task = phases.flatMap(p => p.tasks).find(t => t.id === taskId);
@@ -68,7 +89,8 @@ const App: React.FC = () => {
       
       const updatedImages = task.images.filter(p => p.id !== photoId);
       updateTask(taskId, { images: updatedImages });
-  }, [phases, updateTask]);
+      addLog(`Foto removida da tarefa "${task.name}".`);
+  }, [phases, updateTask, addLog]);
 
   const handleUpdatePhotoComment = useCallback((photoId: string, comment: string) => {
       if(!currentTaskId) return;
@@ -82,7 +104,8 @@ const App: React.FC = () => {
       if(viewingPhoto?.id === photoId) {
         setViewingPhoto(prev => prev ? {...prev, comment} : null);
       }
-  }, [currentTaskId, phases, updateTask, viewingPhoto]);
+      addLog(`Comentário em foto da tarefa "${task.name}" atualizado.`);
+  }, [currentTaskId, phases, updateTask, viewingPhoto, addLog]);
 
   const handleViewImage = useCallback((photo: Photo, taskId: number) => {
     setViewingPhoto(photo);
@@ -95,18 +118,41 @@ const App: React.FC = () => {
   }, []);
 
   const handleUpdatePhaseDate = useCallback((phaseId: number, newDate: string) => {
-    setPhases(currentPhases => 
-      currentPhases.map(phase => 
-        phase.id === phaseId ? { ...phase, deliveryDate: newDate } : phase
-      )
-    );
-  }, []);
+    setPhases(currentPhases => {
+        const phaseToUpdate = currentPhases.find(p => p.id === phaseId);
+        if (phaseToUpdate && phaseToUpdate.deliveryDate !== newDate) {
+            addLog(`Data de entrega da fase "${phaseToUpdate.name}" alterada para ${newDate}.`);
+            return currentPhases.map(phase => 
+                phase.id === phaseId ? { ...phase, deliveryDate: newDate } : phase
+            );
+        }
+        return currentPhases;
+    });
+  }, [addLog]);
   
   const handleSaveDrivePath = useCallback((path: string) => {
     setDriveFolderPath(path);
     setIsDriveModalOpen(false);
-    // In a real app, you'd save this to a server/config
+    addLog(`Caminho do Google Drive atualizado para: "${path}"`);
     console.log('Google Drive path saved:', path);
+  }, [addLog]);
+
+  const handleAdminToggle = () => {
+    if (isAdminMode) {
+      setIsAdminMode(false);
+    } else {
+      setIsLoginModalOpen(true);
+    }
+  };
+
+  const handleLoginSuccess = () => {
+    setIsAdminMode(true);
+    setIsLoginModalOpen(false);
+    addLog('Modo Administrador ativado.');
+  };
+
+  const handleDeleteLog = useCallback((logId: string) => {
+    setLogs(currentLogs => currentLogs.filter(log => log.id !== logId));
   }, []);
 
 
@@ -114,18 +160,23 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
       <Header 
         projectName={projectName}
-        onProjectNameChange={setProjectName}
+        onProjectNameChange={handleProjectNameChange}
         isAdminMode={isAdminMode}
-        onAdminModeToggle={() => setIsAdminMode(!isAdminMode)}
+        onAdminModeToggle={handleAdminToggle}
         onConnectDrive={() => setIsDriveModalOpen(true)}
       />
       <main className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
-        <FeatureNotice />
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <h2 className="text-2xl font-bold text-slate-700 mb-2">Progresso Geral da Obra</h2>
           <p className="text-slate-500 mb-4">Acompanhe a evolução do projeto em tempo real.</p>
           <ProgressBar progress={overallProgress} />
         </div>
+        
+        <ActivityLog 
+            logs={logs}
+            isAdminMode={isAdminMode}
+            onDeleteLog={handleDeleteLog}
+        />
         
         <div className="space-y-4">
           {phases.map((phase) => (
@@ -154,6 +205,12 @@ const App: React.FC = () => {
             currentPath={driveFolderPath}
             onClose={() => setIsDriveModalOpen(false)}
             onSave={handleSaveDrivePath}
+        />
+      )}
+      {isLoginModalOpen && (
+        <AdminLoginModal 
+            onClose={() => setIsLoginModalOpen(false)}
+            onLoginSuccess={handleLoginSuccess}
         />
       )}
     </div>

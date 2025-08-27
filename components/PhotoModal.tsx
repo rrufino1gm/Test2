@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Photo } from '../types';
 
@@ -12,6 +11,10 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, onClose, onCommentChange
   const [comment, setComment] = useState(photo.comment);
 
   useEffect(() => {
+    setComment(photo.comment);
+  }, [photo.comment]);
+
+  useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
@@ -23,9 +26,10 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, onClose, onCommentChange
     };
   }, [onClose]);
   
-  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setComment(e.target.value);
-    onCommentChange(photo.id, e.target.value);
+  const handleBlur = () => {
+    if (comment !== photo.comment) {
+        onCommentChange(photo.id, comment);
+    }
   }
 
   return (
@@ -44,9 +48,10 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, onClose, onCommentChange
             id="comment"
             rows={3}
             value={comment}
-            onChange={handleCommentChange}
+            onChange={(e) => setComment(e.target.value)}
+            onBlur={handleBlur}
             placeholder="Adicione um comentário sobre esta foto..."
-            className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
           />
         </div>
         <button
@@ -57,14 +62,14 @@ const PhotoModal: React.FC<PhotoModalProps> = ({ photo, onClose, onCommentChange
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
-      <style>{`
-        @keyframes fade-in {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        .animate-fade-in {
-            animation: fade-in 0.3s ease-out forwards;
-        }
+       <style>{`
+          @keyframes fade-in {
+              from { opacity: 0; transform: scale(0.95); }
+              to { opacity: 1; transform: scale(1); }
+          }
+          .animate-fade-in {
+              animation: fade-in 0.2s ease-out forwards;
+          }
       `}</style>
     </div>
   );

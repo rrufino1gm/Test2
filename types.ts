@@ -24,3 +24,9 @@ export interface Phase {
   deliveryDate: string;
   tasks: Task[];
 }
+
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  message: string;
+}

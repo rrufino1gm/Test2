@@ -1,5 +1,5 @@
 {
-  "name": "Construction Project Tracker",
+  "name": "OnTracker",
   "description": "A landing page for construction progress reporting. It allows builders to provide daily updates on project phases through a checklist and photo uploads, enabling clients to monitor the work remotely.",
   "requestFramePermissions": []
 }

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Phase, TaskStatus, Photo } from '../types';
 import TaskItem from './TaskItem';
@@ -113,6 +114,7 @@ const PhaseAccordion: React.FC<PhaseAccordionProps> = ({ phase, onToggleComplete
               onPhotoUpload={(files) => onPhotoUpload(task.id, files)}
               onViewImage={(photo) => onViewImage(photo, task.id)}
               onDeletePhoto={(photoId) => onDeletePhoto(task.id, photoId)}
+              isAdminMode={isAdminMode}
             />
           ))}
         </div>

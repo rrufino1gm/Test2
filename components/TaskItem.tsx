@@ -8,6 +8,7 @@ interface TaskItemProps {
   onPhotoUpload: (files: FileList) => void;
   onViewImage: (photo: Photo) => void;
   onDeletePhoto: (photoId: string) => void;
+  isAdminMode: boolean;
 }
 
 const statusStyles: Record<TaskStatus, { bg: string; text: string; ring: string }> = {
@@ -29,7 +30,7 @@ const CloseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 );
 
 
-const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleComplete, onPhotoUpload, onViewImage, onDeletePhoto }) => {
+const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleComplete, onPhotoUpload, onViewImage, onDeletePhoto, isAdminMode }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const style = statusStyles[task.status];
   
@@ -92,7 +93,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleComplete, onPhotoUplo
                   className="w-20 h-20 object-cover rounded-md cursor-pointer ring-2 ring-offset-2 ring-slate-200 group-hover:ring-blue-500 transition-all"
                   onClick={() => onViewImage(photo)}
                 />
-                {!isCompleted && (
+                {isAdminMode && (
                   <button 
                     onClick={() => onDeletePhoto(photo.id)}
                     className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
