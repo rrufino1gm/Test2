@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { Phase, Task, TaskStatus, Photo, LogEntry } from './types';
 import { INITIAL_PROJECT_PHASES } from './constants';
@@ -10,17 +9,31 @@ import GoogleDriveModal from './components/GoogleDriveModal';
 import AdminLoginModal from './components/AdminLoginModal';
 import ActivityLog from './components/ActivityLog';
 
+const LOCAL_STORAGE_KEY = 'construction-tracker-data';
+
+const loadStateFromLocalStorage = () => {
+  try {
+    const serializedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (serializedState === null) return undefined;
+    return JSON.parse(serializedState);
+  } catch (error) {
+    console.error("Could not load state from localStorage", error);
+    return undefined;
+  }
+};
+
 const App: React.FC = () => {
-  const [projectName, setProjectName] = useState<string>('Acompanhamento de Obra');
-  const [phases, setPhases] = useState<Phase[]>(INITIAL_PROJECT_PHASES);
+  const [projectName, setProjectName] = useState<string>(() => loadStateFromLocalStorage()?.projectName || 'Acompanhamento de Obra');
+  const [phases, setPhases] = useState<Phase[]>(() => loadStateFromLocalStorage()?.phases || INITIAL_PROJECT_PHASES);
+  const [logs, setLogs] = useState<LogEntry[]>(() => loadStateFromLocalStorage()?.logs || []);
+  const [driveFolderPath, setDriveFolderPath] = useState<string>(() => loadStateFromLocalStorage()?.driveFolderPath || 'Minha Obra/Fotos');
+
   const [viewingPhoto, setViewingPhoto] = useState<Photo | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<number | null>(null);
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState<boolean>(false);
-  const [driveFolderPath, setDriveFolderPath] = useState<string>('Minha Obra/Fotos');
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   const totalTasks = useMemo(() => phases.reduce((acc, phase) => acc + phase.tasks.length, 0), [phases]);
   const completedTasks = useMemo(() => phases.flatMap(p => p.tasks).filter(t => t.status === TaskStatus.Completed).length, [phases]);
@@ -65,22 +78,39 @@ const App: React.FC = () => {
     addLog(`Tarefa "${task.name}" marcada como ${newStatus}.`);
   }, [phases, updateTask, addLog]);
 
-  const handlePhotoUpload = useCallback((taskId: number, files: FileList) => {
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const handlePhotoUpload = useCallback(async (taskId: number, files: FileList) => {
     const currentTask = phases.flatMap(p => p.tasks).find(t => t.id === taskId);
     if (!currentTask) return;
 
-    const newPhotos: Photo[] = Array.from(files).map(file => ({
-      id: self.crypto.randomUUID(),
-      url: URL.createObjectURL(file),
-      comment: ''
-    }));
+    try {
+        const base64Promises = Array.from(files).map(fileToBase64);
+        const base64Urls = await Promise.all(base64Promises);
 
-    updateTask(taskId, {
-      images: [...currentTask.images, ...newPhotos],
-      status: TaskStatus.InProgress,
-      lastUpdated: new Date().toLocaleString('pt-BR'),
-    });
-    addLog(`${files.length} foto(s) adicionada(s) à tarefa "${currentTask.name}".`);
+        const newPhotos: Photo[] = base64Urls.map(url => ({
+            id: self.crypto.randomUUID(),
+            url: url,
+            comment: ''
+        }));
+
+        updateTask(taskId, {
+            images: [...currentTask.images, ...newPhotos],
+            status: TaskStatus.InProgress,
+            lastUpdated: new Date().toLocaleString('pt-BR'),
+        });
+        addLog(`${files.length} foto(s) adicionada(s) à tarefa "${currentTask.name}".`);
+    } catch (error) {
+        console.error("Error converting files to base64", error);
+        addLog(`Falha ao processar as fotos.`);
+    }
   }, [updateTask, phases, addLog]);
   
   const handleDeletePhoto = useCallback((taskId: number, photoId: string) => {
@@ -134,7 +164,6 @@ const App: React.FC = () => {
     setDriveFolderPath(path);
     setIsDriveModalOpen(false);
     addLog(`Caminho do Google Drive atualizado para: "${path}"`);
-    console.log('Google Drive path saved:', path);
   }, [addLog]);
 
   const handleAdminToggle = () => {
@@ -155,6 +184,38 @@ const App: React.FC = () => {
     setLogs(currentLogs => currentLogs.filter(log => log.id !== logId));
   }, []);
 
+  const handleSave = useCallback(() => {
+    setSaveStatus('saving');
+    try {
+        const stateToSave = {
+            projectName,
+            phases,
+            logs,
+            driveFolderPath,
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
+        addLog('Progresso salvo localmente no navegador.');
+        setTimeout(() => {
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        }, 500);
+    } catch (error) {
+        console.error("Failed to save state to localStorage", error);
+        addLog('Erro ao salvar o progresso.');
+        setSaveStatus('idle');
+    }
+  }, [projectName, phases, logs, driveFolderPath, addLog]);
+
+  const handleReset = useCallback(() => {
+    if (window.confirm('Tem certeza que deseja apagar todos os dados salvos e reiniciar o projeto? Esta ação não pode ser desfeita.')) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        setProjectName('Acompanhamento de Obra');
+        setPhases(INITIAL_PROJECT_PHASES);
+        setLogs([]);
+        setDriveFolderPath('Minha Obra/Fotos');
+        addLog('Projeto reiniciado para o estado original.');
+    }
+  }, [addLog]);
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
@@ -164,6 +225,9 @@ const App: React.FC = () => {
         isAdminMode={isAdminMode}
         onAdminModeToggle={handleAdminToggle}
         onConnectDrive={() => setIsDriveModalOpen(true)}
+        onSave={handleSave}
+        onReset={handleReset}
+        saveStatus={saveStatus}
       />
       <main className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">

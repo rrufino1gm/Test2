@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 
 const BuildingIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -19,6 +18,22 @@ const DriveIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><g><path d="M22.053 13.316l-1.008-5.644-6.353-6.353-5.644-1.008-6.048 10.999 4.084 7.702 14.969-5.7z"></path><path d="M8.285 20.315l14.969-5.699-2.91-4.832-14.073 5.429z"></path><path d="M7.039 8.441l-2.955 5.371 14.073-5.429 2.014-3.805z"></path></g></svg>
 );
 
+const SaveIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+        <polyline points="7 3 7 8 15 8"></polyline>
+    </svg>
+);
+
+const ResetIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M3 2v6h6" />
+    <path d="M21 12A9 9 0 0 0 6 5.3L3 8" />
+    <path d="M21 22v-6h-6" />
+    <path d="M3 12a9 9 0 0 0 15 6.7l3-2.7" />
+  </svg>
+);
 
 interface HeaderProps {
     projectName: string;
@@ -26,9 +41,21 @@ interface HeaderProps {
     isAdminMode: boolean;
     onAdminModeToggle: () => void;
     onConnectDrive: () => void;
+    onSave: () => void;
+    onReset: () => void;
+    saveStatus: 'idle' | 'saving' | 'saved';
 }
 
-const Header: React.FC<HeaderProps> = ({ projectName, onProjectNameChange, isAdminMode, onAdminModeToggle, onConnectDrive }) => {
+const Header: React.FC<HeaderProps> = ({ 
+    projectName, 
+    onProjectNameChange, 
+    isAdminMode, 
+    onAdminModeToggle, 
+    onConnectDrive,
+    onSave,
+    onReset,
+    saveStatus
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(projectName);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +82,17 @@ const Header: React.FC<HeaderProps> = ({ projectName, onProjectNameChange, isAdm
     } else if (e.key === 'Escape') {
       setIsEditing(false);
       setName(projectName);
+    }
+  };
+
+  const getSaveButtonContent = () => {
+    switch (saveStatus) {
+        case 'saving':
+            return 'Salvando...';
+        case 'saved':
+            return 'Salvo!';
+        default:
+            return 'Salvar Progresso';
     }
   };
 
@@ -89,23 +127,39 @@ const Header: React.FC<HeaderProps> = ({ projectName, onProjectNameChange, isAdm
                 <p className="text-slate-500 text-sm">Relatório diário de progresso da construção</p>
             </div>
         </div>
-        <div className="flex items-center gap-3 self-end sm:self-center">
+        <div className="flex items-center gap-3 self-end sm:self-center flex-wrap justify-end">
           {isAdminMode && (
-            <button onClick={onConnectDrive} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-md transition-colors duration-300 bg-white text-slate-700 border border-slate-300 hover:bg-slate-100">
-                <DriveIcon className="w-4 h-4 text-green-500" />
-                <span className="hidden md:inline">Google Drive</span>
-            </button>
+            <>
+                <button onClick={onConnectDrive} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-md transition-colors duration-300 bg-white text-slate-700 border border-slate-300 hover:bg-slate-100">
+                    <DriveIcon className="w-4 h-4 text-green-500" />
+                    <span className="hidden md:inline">Google Drive</span>
+                </button>
+                <button onClick={onReset} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-md transition-colors duration-300 bg-red-100 text-red-700 border border-red-200 hover:bg-red-200">
+                    <ResetIcon className="w-4 h-4" />
+                    <span className="hidden md:inline">Reiniciar</span>
+                </button>
+            </>
           )}
-          <label htmlFor="admin-toggle" className="text-sm font-medium text-slate-600 whitespace-nowrap">Modo Admin</label>
-          <button 
-            role="switch"
-            aria-checked={isAdminMode}
-            id="admin-toggle"
-            onClick={onAdminModeToggle} 
-            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isAdminMode ? 'bg-blue-600' : 'bg-slate-300'}`}
+           <button 
+            onClick={onSave}
+            disabled={saveStatus !== 'idle'}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-md transition-all duration-300 text-white ${saveStatus === 'saved' ? 'bg-green-500' : 'bg-blue-600 hover:bg-blue-700'} disabled:opacity-70 disabled:cursor-wait`}
           >
-            <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ${isAdminMode ? 'translate-x-6' : 'translate-x-1'}`}/>
+              <SaveIcon className="w-4 h-4"/>
+              <span>{getSaveButtonContent()}</span>
           </button>
+          <div className="flex items-center gap-2">
+            <label htmlFor="admin-toggle" className="text-sm font-medium text-slate-600 whitespace-nowrap">Admin</label>
+            <button 
+                role="switch"
+                aria-checked={isAdminMode}
+                id="admin-toggle"
+                onClick={onAdminModeToggle} 
+                className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isAdminMode ? 'bg-blue-600' : 'bg-slate-300'}`}
+            >
+                <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ${isAdminMode ? 'translate-x-6' : 'translate-x-1'}`}/>
+            </button>
+          </div>
         </div>
       </div>
     </header>
