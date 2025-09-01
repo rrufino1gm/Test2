@@ -9,12 +9,12 @@ const LockIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
 );
 
-const ADMIN_PASSWORD = 'admin'; // Senha simples para fins de demonstração
+const ADMIN_PASSWORD = 'admin@10'; // Senha simples para fins de demonstração
 
 const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ onClose, onLoginSuccess }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const [showHint, setShowHint] = useState(false);
+    const [recoveryMessage, setRecoveryMessage] = useState('');
 
     useEffect(() => {
         const handleEsc = (event: KeyboardEvent) => {
@@ -33,12 +33,12 @@ const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ onClose, onLoginSucce
             onLoginSuccess();
         } else {
             setError('Senha incorreta. Tente novamente.');
-            setShowHint(false);
+            setRecoveryMessage('');
         }
     };
 
     const handleForgotPassword = () => {
-        setShowHint(true);
+        setRecoveryMessage('Entre em contato com o administrador para recuperar sua senha.');
         setError('');
     };
 
@@ -69,7 +69,7 @@ const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ onClose, onLoginSucce
                             type="password"
                             id="admin-password"
                             value={password}
-                            onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                            onChange={(e) => { setPassword(e.target.value); setError(''); setRecoveryMessage(''); }}
                             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                             placeholder="Senha"
                             className={`w-full p-3 border rounded-md focus:ring-2 focus:border-blue-500 transition-all ${error ? 'border-red-500 ring-red-200' : 'border-slate-300 focus:ring-blue-500'}`}
@@ -84,9 +84,9 @@ const AdminLoginModal: React.FC<AdminLoginModalProps> = ({ onClose, onLoginSucce
                         </button>
                     </div>
 
-                    {showHint && (
+                    {recoveryMessage && (
                         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-md text-sm">
-                           <p><strong>Dica:</strong> A senha para esta demonstração é <strong>`{ADMIN_PASSWORD}`</strong>.</p>
+                           <p>{recoveryMessage}</p>
                         </div>
                     )}
                 </div>
