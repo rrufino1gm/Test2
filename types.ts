@@ -30,3 +30,26 @@ export interface LogEntry {
   timestamp: string;
   message: string;
 }
+
+export interface Payment {
+  id: string;
+  amount: number;
+  date: string;
+  receiptUrl?: string; // base64 data URL
+  comments?: string;
+}
+
+export enum MilestoneStatus {
+  Pending = 'Pendente',
+  PartiallyPaid = 'Pagamento Parcial',
+  Paid = 'Pago',
+}
+
+export interface PaymentMilestone {
+  id: number;
+  phaseName: string;
+  totalValue: number;
+  condition: string;
+  status: MilestoneStatus;
+  payments: Payment[];
+}

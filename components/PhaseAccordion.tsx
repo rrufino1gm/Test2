@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Phase, TaskStatus, Photo } from '../types';
 import TaskItem from './TaskItem';

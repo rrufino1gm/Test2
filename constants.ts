@@ -1,4 +1,4 @@
-import { Phase, TaskStatus } from './types';
+import { Phase, TaskStatus, PaymentMilestone, MilestoneStatus } from './types';
 
 export const INITIAL_PROJECT_PHASES: Phase[] = [
   {
@@ -63,5 +63,56 @@ export const INITIAL_PROJECT_PHASES: Phase[] = [
       { id: 601, name: 'Pintura interna e externa', status: TaskStatus.Pending, images: [] },
       { id: 602, name: 'Limpeza final', status: TaskStatus.Pending, images: [] },
     ],
+  },
+];
+
+export const INITIAL_PAYMENT_MILESTONES: PaymentMilestone[] = [
+  {
+    id: 1,
+    phaseName: '1. Início obra - Pag Inicial',
+    totalValue: 55160.00,
+    condition: 'Após mobilização e início da fundação',
+    status: MilestoneStatus.Pending,
+    payments: [],
+  },
+  {
+    id: 2,
+    phaseName: '2. Estrutura e Cobertura',
+    totalValue: 148932.00,
+    condition: 'Após conclusão da estrutura e cobertura',
+    status: MilestoneStatus.Pending,
+    payments: [],
+  },
+  {
+    id: 3,
+    phaseName: '3. Rebocos e Instalações',
+    totalValue: 121352.00,
+    condition: 'Após conclusão das instalações e rebocos',
+    status: MilestoneStatus.Pending,
+    payments: [],
+  },
+  {
+    id: 4,
+    phaseName: '4. Gesso e Pisos',
+    totalValue: 88256.00,
+    condition: 'Após instalação de pisos e forros',
+    status: MilestoneStatus.Pending,
+    payments: [],
+  },
+  {
+    id: 5,
+    phaseName: '5. Portas e Louças',
+    totalValue: 93772.00,
+    condition: 'Após instalação de portas e louças',
+    status: MilestoneStatus.Pending,
+    payments: [],
+  },
+  {
+    id: 6,
+    phaseName: '6. Pintura e Entrega',
+    totalValue: 44128.00,
+    condition: 'Após conclusão da pintura e vistoria final',
+    status: MilestoneStatus.Pending,
+    payments: [],
   },
 ];

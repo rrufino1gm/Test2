@@ -1,6 +1,5 @@
-
 import { sql } from '@vercel/postgres';
-import { INITIAL_PROJECT_PHASES } from '../constants';
+import { INITIAL_PROJECT_PHASES, INITIAL_PAYMENT_MILESTONES } from '../constants';
 
 export const config = {
   runtime: 'edge',
@@ -29,11 +28,12 @@ export default async function handler(request: Request) {
         logs: [
             {
                 id: crypto.randomUUID(),
-                timestamp: new Date().toLocaleString('pt-BR'),
+                timestamp: new Date().toISOString(),
                 message: 'Projeto inicializado na nuvem.',
             }
         ],
         driveFolderPath: 'Minha Obra/Fotos',
+        paymentMilestones: INITIAL_PAYMENT_MILESTONES,
       };
       await sql`INSERT INTO project_data (id, data) VALUES (1, ${JSON.stringify(initialState)});`;
       data = initialState;

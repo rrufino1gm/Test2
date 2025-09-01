@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Phase, Task, TaskStatus, Photo, LogEntry } from './types';
-import { INITIAL_PROJECT_PHASES } from './constants';
+import { Phase, Task, TaskStatus, Photo, LogEntry, PaymentMilestone, MilestoneStatus, Payment } from './types';
+import { INITIAL_PROJECT_PHASES, INITIAL_PAYMENT_MILESTONES } from './constants';
 import Header from './components/Header';
 import ProgressBar from './components/ProgressBar';
 import PhaseAccordion from './components/PhaseAccordion';
@@ -10,18 +10,28 @@ import GoogleDriveModal from './components/GoogleDriveModal';
 import AdminLoginModal from './components/AdminLoginModal';
 import ActivityLog from './components/ActivityLog';
 import FeatureNotice from './components/FeatureNotice';
+import Tabs from './components/Tabs';
+import Payments from './components/Payments';
+import PaymentModal from './components/PaymentModal';
+
+type AppTab = 'progress' | 'payments';
 
 const App: React.FC = () => {
   const [projectName, setProjectName] = useState<string>('Acompanhamento de Obra');
   const [phases, setPhases] = useState<Phase[]>([]);
+  const [paymentMilestones, setPaymentMilestones] = useState<PaymentMilestone[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [driveFolderPath, setDriveFolderPath] = useState<string>('Minha Obra/Fotos');
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [activeTab, setActiveTab] = useState<AppTab>('progress');
   const [viewingPhoto, setViewingPhoto] = useState<Photo | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<number | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [payingMilestone, setPayingMilestone] = useState<PaymentMilestone | null>(null);
+
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState<boolean>(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
@@ -40,12 +50,14 @@ const App: React.FC = () => {
             const data = await response.json();
             setProjectName(data.projectName || 'Acompanhamento de Obra');
             setPhases(data.phases || INITIAL_PROJECT_PHASES);
+            setPaymentMilestones(data.paymentMilestones || INITIAL_PAYMENT_MILESTONES);
             setLogs(data.logs || []);
             setDriveFolderPath(data.driveFolderPath || 'Minha Obra/Fotos');
         } catch (err: any) {
             setError(err.message);
             console.error(err);
             setPhases(INITIAL_PROJECT_PHASES);
+            setPaymentMilestones(INITIAL_PAYMENT_MILESTONES);
             setLogs([]);
         } finally {
             setIsLoading(false);
@@ -78,6 +90,7 @@ const App: React.FC = () => {
         const fullState = {
             projectName,
             phases,
+            paymentMilestones,
             logs,
             driveFolderPath
         };
@@ -99,13 +112,14 @@ const App: React.FC = () => {
         setError(err.message);
         setSaveStatus('idle');
     }
-  }, [projectName, phases, logs, driveFolderPath]);
+  }, [projectName, phases, paymentMilestones, logs, driveFolderPath]);
   
   const handleReset = useCallback(async () => {
     if (window.confirm("Tem certeza que deseja reiniciar todo o progresso? Esta ação não pode ser desfeita.")) {
         const initialData = {
             projectName: 'Acompanhamento de Obra',
             phases: INITIAL_PROJECT_PHASES,
+            paymentMilestones: INITIAL_PAYMENT_MILESTONES,
             logs: [{
                 id: crypto.randomUUID(),
                 timestamp: new Date().toLocaleString('pt-BR'),
@@ -129,6 +143,7 @@ const App: React.FC = () => {
             
             setProjectName(initialData.projectName);
             setPhases(initialData.phases);
+            setPaymentMilestones(initialData.paymentMilestones);
             setLogs(initialData.logs);
             setDriveFolderPath(initialData.driveFolderPath);
             addLog('Progresso reiniciado para o estado inicial.');
@@ -259,6 +274,55 @@ const App: React.FC = () => {
     addLog(`Caminho do Google Drive atualizado para: ${newPath}`);
   };
 
+  const handleOpenPaymentModal = useCallback((milestone: PaymentMilestone) => {
+    setPayingMilestone(milestone);
+    setIsPaymentModalOpen(true);
+  }, []);
+
+  const handleAddPayment = useCallback(async (milestoneId: number, paymentData: { amount: number; receiptFile: File | null; comments: string }) => {
+    const { amount, receiptFile, comments } = paymentData;
+
+    let receiptUrl: string | undefined = undefined;
+    if (receiptFile) {
+        receiptUrl = await fileToBase64(receiptFile);
+    }
+
+    const newPayment: Payment = {
+        id: crypto.randomUUID(),
+        amount,
+        comments,
+        receiptUrl,
+        date: new Date().toISOString(),
+    };
+
+    const milestoneName = paymentMilestones.find(m => m.id === milestoneId)?.phaseName || '';
+
+    setPaymentMilestones(prev => 
+        prev.map(m => {
+            if (m.id === milestoneId) {
+                const updatedPayments = [...m.payments, newPayment];
+                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+                
+                let newStatus: MilestoneStatus;
+                if (totalPaid >= m.totalValue) {
+                    newStatus = MilestoneStatus.Paid;
+                } else if (totalPaid > 0) {
+                    newStatus = MilestoneStatus.PartiallyPaid;
+                } else {
+                    newStatus = MilestoneStatus.Pending;
+                }
+
+                return { ...m, payments: updatedPayments, status: newStatus };
+            }
+            return m;
+        })
+    );
+    addLog(`Pagamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} registrado para "${milestoneName}".`);
+    setIsPaymentModalOpen(false);
+    setPayingMilestone(null);
+  }, [addLog, paymentMilestones]);
+
+
   if (isLoading) {
     return (
         <div className="flex items-center justify-center h-screen bg-slate-50">
@@ -269,6 +333,11 @@ const App: React.FC = () => {
         </div>
     );
   }
+
+  const TABS = [
+    { id: 'progress', label: 'Andamento da Obra' },
+    { id: 'payments', label: 'Financeiro' },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans">
@@ -295,23 +364,34 @@ const App: React.FC = () => {
             )}
             
             <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <ProgressBar progress={totalProgress} />
+                <Tabs tabs={TABS} activeTab={activeTab} onTabClick={(id) => setActiveTab(id as AppTab)} />
+                {activeTab === 'progress' && <div className="mt-6"><ProgressBar progress={totalProgress} /></div>}
             </div>
             
-            <div className="space-y-6">
-                {phases.map(phase => (
-                    <PhaseAccordion
-                        key={phase.id}
-                        phase={phase}
-                        isAdminMode={isAdminMode}
-                        onToggleComplete={handleToggleComplete}
-                        onPhotoUpload={handlePhotoUpload}
-                        onViewImage={handleViewImage}
-                        onDeletePhoto={handleDeletePhoto}
-                        onUpdateDate={handleUpdateDate}
-                    />
-                ))}
-            </div>
+            {activeTab === 'progress' && (
+                <div className="space-y-6">
+                    {phases.map(phase => (
+                        <PhaseAccordion
+                            key={phase.id}
+                            phase={phase}
+                            isAdminMode={isAdminMode}
+                            onToggleComplete={handleToggleComplete}
+                            onPhotoUpload={handlePhotoUpload}
+                            onViewImage={handleViewImage}
+                            onDeletePhoto={handleDeletePhoto}
+                            onUpdateDate={handleUpdateDate}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {activeTab === 'payments' && (
+                <Payments 
+                    milestones={paymentMilestones}
+                    isAdminMode={isAdminMode}
+                    onAddPayment={handleOpenPaymentModal}
+                />
+            )}
 
             <div className="mt-8">
                 <ActivityLog logs={logs} isAdminMode={isAdminMode} onDeleteLog={(logId) => setLogs(logs.filter(l => l.id !== logId))} />
@@ -342,6 +422,14 @@ const App: React.FC = () => {
             <AdminLoginModal
                 onClose={() => setIsLoginModalOpen(false)}
                 onLoginSuccess={handleLoginSuccess}
+            />
+        )}
+
+        {isPaymentModalOpen && payingMilestone && (
+            <PaymentModal
+                milestone={payingMilestone}
+                onClose={() => { setIsPaymentModalOpen(false); setPayingMilestone(null); }}
+                onSubmit={handleAddPayment}
             />
         )}
     </div>
