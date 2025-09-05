@@ -13,6 +13,7 @@ import FeatureNotice from './components/FeatureNotice';
 import Tabs from './components/Tabs';
 import Payments from './components/Payments';
 import PaymentModal from './components/PaymentModal';
+import PinModal from './components/PinModal';
 
 type AppTab = 'progress' | 'payments';
 
@@ -36,6 +37,8 @@ const App: React.FC = () => {
   const [isDriveModalOpen, setIsDriveModalOpen] = useState<boolean>(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [isPaymentsUnlocked, setIsPaymentsUnlocked] = useState<boolean>(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -257,6 +260,7 @@ const App: React.FC = () => {
   const handleAdminModeToggle = () => {
     if (isAdminMode) {
         setIsAdminMode(false);
+        setIsPaymentsUnlocked(false);
     } else {
         setIsLoginModalOpen(true);
     }
@@ -322,6 +326,21 @@ const App: React.FC = () => {
     setPayingMilestone(null);
   }, [addLog, paymentMilestones]);
 
+  const handleTabClick = (tabId: AppTab) => {
+    if (tabId === 'payments' && !isPaymentsUnlocked) {
+        setIsPinModalOpen(true);
+    } else {
+        setActiveTab(tabId);
+    }
+  };
+
+  const handlePinSuccess = () => {
+      setIsPaymentsUnlocked(true);
+      setActiveTab('payments');
+      setIsPinModalOpen(false);
+      addLog('Acesso à aba Financeiro liberado.');
+  };
+
 
   if (isLoading) {
     return (
@@ -364,7 +383,7 @@ const App: React.FC = () => {
             )}
             
             <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <Tabs tabs={TABS} activeTab={activeTab} onTabClick={(id) => setActiveTab(id as AppTab)} />
+                <Tabs tabs={TABS} activeTab={activeTab} onTabClick={(id) => handleTabClick(id as AppTab)} />
                 {activeTab === 'progress' && <div className="mt-6"><ProgressBar progress={totalProgress} /></div>}
             </div>
             
@@ -430,6 +449,13 @@ const App: React.FC = () => {
                 milestone={payingMilestone}
                 onClose={() => { setIsPaymentModalOpen(false); setPayingMilestone(null); }}
                 onSubmit={handleAddPayment}
+            />
+        )}
+
+        {isPinModalOpen && (
+            <PinModal
+                onClose={() => setIsPinModalOpen(false)}
+                onSuccess={handlePinSuccess}
             />
         )}
     </div>

@@ -65,7 +65,6 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleComplete, onPhotoUplo
           <input
               type="file"
               accept="image/*"
-              capture="environment"
               multiple
               ref={fileInputRef}
               onChange={handleFileUpload}
