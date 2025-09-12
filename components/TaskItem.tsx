@@ -64,7 +64,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleComplete, onPhotoUplo
         <div className="flex items-center gap-3 self-end sm:self-center">
           <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               multiple
               ref={fileInputRef}
               onChange={handleFileUpload}

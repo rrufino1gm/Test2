@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { PaymentMilestone } from '../types';
 
@@ -92,7 +93,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ milestone, onClose, onSubmi
                                     <div className="flex text-sm text-slate-600">
                                         <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
                                             <span>Carregue um arquivo</span>
-                                            <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/*,.pdf" />
+                                            <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/jpeg,image/png,image/webp,.pdf" />
                                         </label>
                                         <p className="pl-1">ou arraste e solte</p>
                                     </div>

@@ -262,7 +262,7 @@ const App: React.FC = () => {
     for (const file of Array.from(files)) {
         try {
             // Resize images to prevent payload size issues, especially on mobile.
-            const base64Url = await resizeImage(file, 1280, 1280);
+            const base64Url = await resizeImage(file, 1024, 1024, 0.75);
             const newPhoto: Photo = {
                 id: crypto.randomUUID(),
                 url: base64Url,
@@ -275,7 +275,7 @@ const App: React.FC = () => {
             successCount++;
         } catch (err) {
             console.error("Error processing image:", err);
-            setError(`Falha ao processar a imagem "${file.name}". Por favor, use um formato de imagem padrão (JPG, PNG).`);
+            setError(`Falha ao processar a imagem "${file.name}". Por favor, use um formato de imagem padrão (JPG, PNG, WebP).`);
         }
     }
 
@@ -356,7 +356,7 @@ const App: React.FC = () => {
         if (receiptFile.type.startsWith('image/')) {
             try {
                 // Resize receipt images to a smaller size
-                receiptUrl = await resizeImage(receiptFile, 800, 800, 0.75);
+                receiptUrl = await resizeImage(receiptFile, 800, 800, 0.7);
             } catch (err) {
                  console.error("Failed to resize receipt image, falling back to original", err);
                  setError('Falha ao processar a imagem do recibo. Tentando enviar o original.');
