@@ -17,6 +17,60 @@ import PinModal from './components/PinModal';
 
 type AppTab = 'progress' | 'payments';
 
+/**
+ * Resizes an image file before uploading.
+ * @param file The image file to resize.
+ * @param maxWidth The maximum width of the resized image.
+ * @param maxHeight The maximum height of the resized image.
+ * @param quality The quality of the output JPEG image (0 to 1).
+ * @returns A promise that resolves with the base64 data URL of the resized image.
+ */
+const resizeImage = (file: File, maxWidth: number, maxHeight: number, quality = 0.8): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        if (!file.type.startsWith('image/')) {
+            return reject(new Error('File is not an image.'));
+        }
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            if (!event.target?.result) {
+                return reject(new Error("FileReader did not load the file correctly."));
+            }
+            const img = new Image();
+            img.src = event.target.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round(height * (maxWidth / width));
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round(width * (maxHeight / height));
+                        height = maxHeight;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    return reject(new Error('Could not get canvas context'));
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.onerror = (error) => reject(error);
+        };
+        reader.onerror = (error) => reject(error);
+    });
+};
+
+
 const App: React.FC = () => {
   const [projectName, setProjectName] = useState<string>('Acompanhamento de Obra');
   const [phases, setPhases] = useState<Phase[]>([]);
@@ -200,23 +254,34 @@ const App: React.FC = () => {
   };
     
   const handlePhotoUpload = useCallback(async (taskId: number, files: FileList) => {
-    if (!files) return;
+    if (!files || files.length === 0) return;
     
     const taskName = phases.flatMap(p => p.tasks).find(t => t.id === taskId)?.name || `Tarefa ${taskId}`;
+    let successCount = 0;
 
     for (const file of Array.from(files)) {
-        const base64Url = await fileToBase64(file);
-        const newPhoto: Photo = {
-            id: crypto.randomUUID(),
-            url: base64Url,
-            comment: '',
-        };
-        updateTask(taskId, task => ({
-            ...task,
-            images: [...task.images, newPhoto],
-        }));
+        try {
+            // Resize images to prevent payload size issues, especially on mobile.
+            const base64Url = await resizeImage(file, 1280, 1280);
+            const newPhoto: Photo = {
+                id: crypto.randomUUID(),
+                url: base64Url,
+                comment: '',
+            };
+            updateTask(taskId, task => ({
+                ...task,
+                images: [...task.images, newPhoto],
+            }));
+            successCount++;
+        } catch (err) {
+            console.error("Error processing image:", err);
+            setError(`Falha ao processar a imagem "${file.name}". Por favor, use um formato de imagem padrão (JPG, PNG).`);
+        }
     }
-    addLog(`${files.length} foto(s) adicionada(s) à tarefa "${taskName}".`);
+
+    if (successCount > 0) {
+        addLog(`${successCount} foto(s) adicionada(s) à tarefa "${taskName}".`);
+    }
   }, [updateTask, addLog, phases]);
 
   const handleDeletePhoto = useCallback((taskId: number, photoId: string) => {
@@ -288,7 +353,19 @@ const App: React.FC = () => {
 
     let receiptUrl: string | undefined = undefined;
     if (receiptFile) {
-        receiptUrl = await fileToBase64(receiptFile);
+        if (receiptFile.type.startsWith('image/')) {
+            try {
+                // Resize receipt images to a smaller size
+                receiptUrl = await resizeImage(receiptFile, 800, 800, 0.75);
+            } catch (err) {
+                 console.error("Failed to resize receipt image, falling back to original", err);
+                 setError('Falha ao processar a imagem do recibo. Tentando enviar o original.');
+                 receiptUrl = await fileToBase64(receiptFile);
+            }
+        } else {
+            // For non-image files like PDFs, use base64 directly
+            receiptUrl = await fileToBase64(receiptFile);
+        }
     }
 
     const newPayment: Payment = {
