@@ -7,14 +7,6 @@ export const config = {
 
 export default async function handler(request: Request) {
   try {
-    // Ensure table exists for robustness
-    await sql`
-      CREATE TABLE IF NOT EXISTS project_data (
-        id INT PRIMARY KEY,
-        data JSONB
-      );
-    `;
-
     const { rows } = await sql`SELECT data FROM project_data WHERE id = 1;`;
 
     let data;
@@ -52,7 +44,7 @@ export default async function handler(request: Request) {
   } catch (error: any) {
     console.error('API Error (get-data):', error);
     const errorMessage = error.message.includes('relation "project_data" does not exist')
-      ? 'A tabela do banco de dados não foi encontrada. Por favor, execute o comando SQL de criação da tabela no painel da Vercel.'
+      ? 'A tabela do banco de dados não foi encontrada. Verifique se o comando de criação foi executado corretamente no painel da Vercel.'
       : 'Erro ao buscar dados do projeto.';
       
     return new Response(JSON.stringify({ error: errorMessage, details: error.message }), {
