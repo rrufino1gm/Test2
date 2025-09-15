@@ -21,7 +21,7 @@ export default async function handler(request: Request) {
     const dataJson = JSON.stringify(data);
 
     await sql`
-      INSERT INTO project_data (id, data) 
+      INSERT INTO public.project_data (id, data) 
       VALUES (1, ${dataJson}) 
       ON CONFLICT (id) 
       DO UPDATE SET data = EXCLUDED.data;

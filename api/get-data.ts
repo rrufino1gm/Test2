@@ -7,7 +7,7 @@ export const config = {
 
 export default async function handler(request: Request) {
   try {
-    const { rows } = await sql`SELECT data FROM project_data WHERE id = 1;`;
+    const { rows } = await sql`SELECT data FROM public.project_data WHERE id = 1;`;
 
     let data;
     if (rows.length > 0) {
@@ -27,7 +27,7 @@ export default async function handler(request: Request) {
         driveFolderPath: 'Minha Obra/Fotos',
         paymentMilestones: INITIAL_PAYMENT_MILESTONES,
       };
-      await sql`INSERT INTO project_data (id, data) VALUES (1, ${JSON.stringify(initialState)});`;
+      await sql`INSERT INTO public.project_data (id, data) VALUES (1, ${JSON.stringify(initialState)});`;
       data = initialState;
     }
 
