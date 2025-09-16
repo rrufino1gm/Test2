@@ -20,7 +20,7 @@ export default async function handler(request: Request) {
   try {
     const { data } = await request.json();
 
-    if (!data || typeof data !== 'string' || !data.startsWith('data:image')) {
+    if (!data || typeof data !== 'string' || !data.startsWith('data:') || !data.includes(';base64,')) {
       return new Response(JSON.stringify({ error: 'Dados de imagem inválidos. O formato esperado é um Data URL.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 

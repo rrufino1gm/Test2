@@ -17,6 +17,9 @@ import PinModal from './components/PinModal';
 
 type AppTab = 'progress' | 'payments';
 
+const MAX_FILE_SIZE_MB = 3;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 /**
  * Resizes an image file before uploading.
  * @param file The image file to resize.
@@ -261,6 +264,11 @@ const App: React.FC = () => {
       let successCount = 0;
 
       for (const file of Array.from(files)) {
+          if (file.size > MAX_FILE_SIZE_BYTES) {
+              setError(`O arquivo "${file.name}" é muito grande. O tamanho máximo é de ${MAX_FILE_SIZE_MB}MB.`);
+              continue; // Pula para o próximo arquivo
+          }
+
           try {
               const base64Url = await resizeImage(file, 1024, 1024, 0.75);
               
@@ -393,6 +401,10 @@ const App: React.FC = () => {
     try {
         let receiptUrl: string | undefined = undefined;
         if (receiptFile) {
+            if (receiptFile.size > MAX_FILE_SIZE_BYTES) {
+                throw new Error(`O arquivo de recibo é muito grande. O tamanho máximo é de ${MAX_FILE_SIZE_MB}MB.`);
+            }
+
             let base64Url: string;
             // For PDFs or other files, we just use the raw base64. For images, we resize.
             if (receiptFile.type.startsWith('image/')) {
