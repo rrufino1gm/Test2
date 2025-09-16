@@ -254,43 +254,81 @@ const App: React.FC = () => {
   };
     
   const handlePhotoUpload = useCallback(async (taskId: number, files: FileList) => {
-    if (!files || files.length === 0) return;
-    
-    const taskName = phases.flatMap(p => p.tasks).find(t => t.id === taskId)?.name || `Tarefa ${taskId}`;
-    let successCount = 0;
+      if (!files || files.length === 0) return;
+      setError(null);
+      
+      const taskName = phases.flatMap(p => p.tasks).find(t => t.id === taskId)?.name || `Tarefa ${taskId}`;
+      let successCount = 0;
 
-    for (const file of Array.from(files)) {
-        try {
-            // Resize images to prevent payload size issues, especially on mobile.
-            const base64Url = await resizeImage(file, 1024, 1024, 0.75);
-            const newPhoto: Photo = {
-                id: crypto.randomUUID(),
-                url: base64Url,
-                comment: '',
-            };
-            updateTask(taskId, task => ({
-                ...task,
-                images: [...task.images, newPhoto],
-            }));
-            successCount++;
-        } catch (err) {
-            console.error("Error processing image:", err);
-            setError(`Falha ao processar a imagem "${file.name}". Por favor, use um formato de imagem padrão (JPG, PNG, WebP).`);
-        }
-    }
+      for (const file of Array.from(files)) {
+          try {
+              const base64Url = await resizeImage(file, 1024, 1024, 0.75);
+              
+              const uploadResponse = await fetch('/api/upload-photo', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ data: base64Url }),
+              });
 
-    if (successCount > 0) {
-        addLog(`${successCount} foto(s) adicionada(s) à tarefa "${taskName}".`);
-    }
-  }, [updateTask, addLog, phases]);
+              if (!uploadResponse.ok) {
+                  const errorData = await uploadResponse.json().catch(() => ({}));
+                  throw new Error(errorData.error || 'Falha no upload da foto para o servidor.');
+              }
+              
+              const { id: newPhotoId } = await uploadResponse.json();
 
-  const handleDeletePhoto = useCallback((taskId: number, photoId: string) => {
-    updateTask(taskId, task => ({
-        ...task,
-        images: task.images.filter(p => p.id !== photoId),
-    }));
-    addLog('Foto removida da tarefa.');
-  }, [updateTask, addLog]);
+              const newPhoto: Photo = {
+                  id: newPhotoId,
+                  url: `/api/get-photo?id=${newPhotoId}`,
+                  comment: '',
+              };
+
+              updateTask(taskId, task => ({
+                  ...task,
+                  images: [...task.images, newPhoto],
+              }));
+              successCount++;
+
+          } catch (err: any) {
+              console.error("Error processing or uploading image:", err);
+              setError(`Falha ao processar ou enviar a imagem "${file.name}". Detalhes: ${err.message}`);
+          }
+      }
+
+      if (successCount > 0) {
+          addLog(`${successCount} foto(s) adicionada(s) à tarefa "${taskName}".`);
+          handleSave(); // Auto-save after successful upload
+      }
+  }, [updateTask, addLog, phases, handleSave]);
+
+
+  const handleDeletePhoto = useCallback(async (taskId: number, photoId: string) => {
+      setError(null);
+      try {
+          const response = await fetch('/api/delete-photo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: photoId }),
+          });
+
+          if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.error || 'Falha ao remover a foto do servidor.');
+          }
+          
+          updateTask(taskId, task => ({
+              ...task,
+              images: task.images.filter(p => p.id !== photoId),
+          }));
+          addLog('Foto removida da tarefa.');
+          handleSave(); // Auto-save after successful deletion
+
+      } catch (err: any) {
+          console.error("Error deleting photo:", err);
+          setError(err.message || 'Não foi possível remover a foto. Tente novamente.');
+      }
+  }, [updateTask, addLog, handleSave]);
+
 
   const handleCommentChange = useCallback((photoId: string, comment: string) => {
     setPhases(currentPhases =>
@@ -350,58 +388,74 @@ const App: React.FC = () => {
 
   const handleAddPayment = useCallback(async (milestoneId: number, paymentData: { amount: number; receiptFile: File | null; comments: string }) => {
     const { amount, receiptFile, comments } = paymentData;
+    setError(null);
 
-    let receiptUrl: string | undefined = undefined;
-    if (receiptFile) {
-        if (receiptFile.type.startsWith('image/')) {
-            try {
-                // Resize receipt images to a smaller size
-                receiptUrl = await resizeImage(receiptFile, 800, 800, 0.7);
-            } catch (err) {
-                 console.error("Failed to resize receipt image, falling back to original", err);
-                 setError('Falha ao processar a imagem do recibo. Tentando enviar o original.');
-                 receiptUrl = await fileToBase64(receiptFile);
+    try {
+        let receiptUrl: string | undefined = undefined;
+        if (receiptFile) {
+            let base64Url: string;
+            // For PDFs or other files, we just use the raw base64. For images, we resize.
+            if (receiptFile.type.startsWith('image/')) {
+                base64Url = await resizeImage(receiptFile, 800, 800, 0.7);
+            } else {
+                base64Url = await fileToBase64(receiptFile);
             }
-        } else {
-            // For non-image files like PDFs, use base64 directly
-            receiptUrl = await fileToBase64(receiptFile);
+
+            const uploadResponse = await fetch('/api/upload-photo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: base64Url }),
+            });
+
+            if (!uploadResponse.ok) {
+                const errorData = await uploadResponse.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Falha no upload do recibo para o servidor.');
+            }
+            
+            const { id: newPhotoId } = await uploadResponse.json();
+            receiptUrl = `/api/get-photo?id=${newPhotoId}`;
         }
+
+        const newPayment: Payment = {
+            id: crypto.randomUUID(),
+            amount,
+            comments,
+            receiptUrl,
+            date: new Date().toISOString(),
+        };
+
+        const milestoneName = paymentMilestones.find(m => m.id === milestoneId)?.phaseName || '';
+
+        setPaymentMilestones(prev => 
+            prev.map(m => {
+                if (m.id === milestoneId) {
+                    const updatedPayments = [...m.payments, newPayment];
+                    const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+                    
+                    let newStatus: MilestoneStatus;
+                    if (totalPaid >= m.totalValue) {
+                        newStatus = MilestoneStatus.Paid;
+                    } else if (totalPaid > 0) {
+                        newStatus = MilestoneStatus.PartiallyPaid;
+                    } else {
+                        newStatus = MilestoneStatus.Pending;
+                    }
+
+                    return { ...m, payments: updatedPayments, status: newStatus };
+                }
+                return m;
+            })
+        );
+        addLog(`Pagamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} registrado para "${milestoneName}".`);
+        setIsPaymentModalOpen(false);
+        setPayingMilestone(null);
+        handleSave(); // Auto-save after successful payment addition
+    } catch (err: any) {
+        console.error("Error adding payment:", err);
+        setError(`Falha ao registrar pagamento. Detalhes: ${err.message}`);
     }
 
-    const newPayment: Payment = {
-        id: crypto.randomUUID(),
-        amount,
-        comments,
-        receiptUrl,
-        date: new Date().toISOString(),
-    };
-
-    const milestoneName = paymentMilestones.find(m => m.id === milestoneId)?.phaseName || '';
-
-    setPaymentMilestones(prev => 
-        prev.map(m => {
-            if (m.id === milestoneId) {
-                const updatedPayments = [...m.payments, newPayment];
-                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
-                
-                let newStatus: MilestoneStatus;
-                if (totalPaid >= m.totalValue) {
-                    newStatus = MilestoneStatus.Paid;
-                } else if (totalPaid > 0) {
-                    newStatus = MilestoneStatus.PartiallyPaid;
-                } else {
-                    newStatus = MilestoneStatus.Pending;
-                }
-
-                return { ...m, payments: updatedPayments, status: newStatus };
-            }
-            return m;
-        })
-    );
-    addLog(`Pagamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} registrado para "${milestoneName}".`);
-    setIsPaymentModalOpen(false);
-    setPayingMilestone(null);
-  }, [addLog, paymentMilestones]);
+  }, [addLog, paymentMilestones, handleSave]);
 
   const handleTabClick = (tabId: AppTab) => {
     if (tabId === 'payments' && !isPaymentsUnlocked) {

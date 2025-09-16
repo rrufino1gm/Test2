@@ -1,3 +1,4 @@
+
 export enum TaskStatus {
   Pending = 'Pendente',
   InProgress = 'Em Andamento',
@@ -35,7 +36,7 @@ export interface Payment {
   id: string;
   amount: number;
   date: string;
-  receiptUrl?: string; // base64 data URL
+  receiptUrl?: string; // URL to the receipt image
   comments?: string;
 }
 
