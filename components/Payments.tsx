@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { PaymentMilestone, MilestoneStatus } from '../types';
 import PaymentItem from './PaymentItem';
@@ -6,6 +7,7 @@ interface PaymentsProps {
     milestones: PaymentMilestone[];
     isAdminMode: boolean;
     onAddPayment: (milestone: PaymentMilestone) => void;
+    onDeletePayment: (milestoneId: number, paymentId: string) => void;
 }
 
 const formatCurrency = (value: number) => {
@@ -15,7 +17,7 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-const Payments: React.FC<PaymentsProps> = ({ milestones, isAdminMode, onAddPayment }) => {
+const Payments: React.FC<PaymentsProps> = ({ milestones, isAdminMode, onAddPayment, onDeletePayment }) => {
     const { total, paid, remaining, progress } = useMemo(() => {
         const total = milestones.reduce((sum, m) => sum + m.totalValue, 0);
         const paid = milestones.flatMap(m => m.payments).reduce((sum, p) => sum + p.amount, 0);
@@ -64,6 +66,7 @@ const Payments: React.FC<PaymentsProps> = ({ milestones, isAdminMode, onAddPayme
                             milestone={milestone}
                             isAdminMode={isAdminMode}
                             onAddPayment={() => onAddPayment(milestone)}
+                            onDeletePayment={(paymentId) => onDeletePayment(milestone.id, paymentId)}
                         />
                     ))}
                  </div>

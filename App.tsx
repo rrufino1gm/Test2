@@ -469,6 +469,43 @@ const App: React.FC = () => {
 
   }, [addLog, paymentMilestones, handleSave]);
 
+  const handleDeletePayment = useCallback((milestoneId: number, paymentId: string) => {
+    let milestoneName = '';
+    let deletedAmount = 0;
+
+    setPaymentMilestones(prev =>
+        prev.map(m => {
+            if (m.id === milestoneId) {
+                milestoneName = m.phaseName;
+                const paymentToDelete = m.payments.find(p => p.id === paymentId);
+                if (!paymentToDelete) return m;
+
+                deletedAmount = paymentToDelete.amount;
+                const updatedPayments = m.payments.filter(p => p.id !== paymentId);
+                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+
+                let newStatus: MilestoneStatus;
+                // Add a small tolerance for floating point comparisons
+                if (totalPaid >= m.totalValue - 0.001) {
+                    newStatus = MilestoneStatus.Paid;
+                } else if (totalPaid > 0) {
+                    newStatus = MilestoneStatus.PartiallyPaid;
+                } else {
+                    newStatus = MilestoneStatus.Pending;
+                }
+
+                return { ...m, payments: updatedPayments, status: newStatus };
+            }
+            return m;
+        })
+    );
+
+    if (milestoneName && deletedAmount > 0) {
+        addLog(`Pagamento de ${deletedAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} removido de "${milestoneName}".`);
+        handleSave(); // Auto-save after successful deletion
+    }
+  }, [addLog, handleSave]);
+
   const handleTabClick = (tabId: AppTab) => {
     if (tabId === 'payments' && !isPaymentsUnlocked) {
         setIsPinModalOpen(true);
@@ -552,6 +589,7 @@ const App: React.FC = () => {
                     milestones={paymentMilestones}
                     isAdminMode={isAdminMode}
                     onAddPayment={handleOpenPaymentModal}
+                    onDeletePayment={handleDeletePayment}
                 />
             )}
 

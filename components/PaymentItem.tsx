@@ -6,6 +6,7 @@ interface PaymentItemProps {
     milestone: PaymentMilestone;
     isAdminMode: boolean;
     onAddPayment: () => void;
+    onDeletePayment: (paymentId: string) => void;
 }
 
 const statusStyles: Record<MilestoneStatus, { bg: string; text: string; ring: string }> = {
@@ -43,7 +44,11 @@ const ChevronDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
-const PaymentItem: React.FC<PaymentItemProps> = ({ milestone, isAdminMode, onAddPayment }) => {
+const TrashIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+);
+
+const PaymentItem: React.FC<PaymentItemProps> = ({ milestone, isAdminMode, onAddPayment, onDeletePayment }) => {
     const [isOpen, setIsOpen] = useState(false);
     
     const paidAmount = useMemo(() => milestone.payments.reduce((sum, p) => sum + p.amount, 0), [milestone.payments]);
@@ -89,28 +94,43 @@ const PaymentItem: React.FC<PaymentItemProps> = ({ milestone, isAdminMode, onAdd
                             <h4 className="font-semibold text-slate-700">Histórico de Pagamentos</h4>
                             <ul className="space-y-4">
                                 {milestone.payments.map(payment => (
-                                    <li key={payment.id} className="border-b border-slate-200 pb-3 last:border-b-0">
-                                        <p>
-                                            <strong className="font-medium text-slate-600">Valor:</strong>
-                                            <span className="text-slate-800">&nbsp;{formatCurrency(payment.amount)}</span>
-                                        </p>
-                                        <p>
-                                            <strong className="font-medium text-slate-600">Data:</strong>
-                                            <span className="text-slate-800">&nbsp;{formatDate(payment.date)}</span>
-                                        </p>
-                                        {payment.comments && (
-                                            <p className="whitespace-pre-wrap">
-                                                <strong className="font-medium text-slate-600">Comentários:</strong>
-                                                <span className="text-slate-800">&nbsp;{payment.comments}</span>
+                                    <li key={payment.id} className="flex items-start justify-between gap-4 border-b border-slate-200 pb-3 last:border-b-0 last:pb-0">
+                                        <div className="flex-1">
+                                            <p>
+                                                <strong className="font-medium text-slate-600">Valor:</strong>
+                                                <span className="text-slate-800">&nbsp;{formatCurrency(payment.amount)}</span>
                                             </p>
-                                        )}
-                                        {payment.receiptUrl && (
-                                            <div className="mt-2">
-                                                <strong className="font-medium text-slate-600 block mb-1">Recibo:</strong>
-                                                <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer">
-                                                    <img src={payment.receiptUrl} alt="Recibo de pagamento" className="max-w-xs rounded-md border" />
-                                                </a>
-                                            </div>
+                                            <p>
+                                                <strong className="font-medium text-slate-600">Data:</strong>
+                                                <span className="text-slate-800">&nbsp;{formatDate(payment.date)}</span>
+                                            </p>
+                                            {payment.comments && (
+                                                <p className="whitespace-pre-wrap">
+                                                    <strong className="font-medium text-slate-600">Comentários:</strong>
+                                                    <span className="text-slate-800">&nbsp;{payment.comments}</span>
+                                                </p>
+                                            )}
+                                            {payment.receiptUrl && (
+                                                <div className="mt-2">
+                                                    <strong className="font-medium text-slate-600 block mb-1">Recibo:</strong>
+                                                    <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer">
+                                                        <img src={payment.receiptUrl} alt="Recibo de pagamento" className="max-w-xs rounded-md border" />
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {isAdminMode && (
+                                            <button 
+                                                onClick={() => {
+                                                    if (window.confirm('Tem certeza que deseja remover este pagamento? Esta ação não pode ser desfeita.')) {
+                                                        onDeletePayment(payment.id);
+                                                    }
+                                                }}
+                                                className="text-slate-400 hover:text-red-500 p-1 -m-1"
+                                                aria-label="Remover pagamento"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
                                         )}
                                     </li>
                                 ))}
