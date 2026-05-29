@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Phase, Task, TaskStatus, Photo, LogEntry, PaymentMilestone, MilestoneStatus, Payment } from './types';
-import { INITIAL_PROJECT_PHASES, INITIAL_PAYMENT_MILESTONES } from './constants';
+import { INITIAL_PROJECT_PHASES, INITIAL_PAYMENT_MILESTONES, INITIAL_EXTRA_PAYMENT_MILESTONES } from './constants';
 import Header from './components/Header';
 import ProgressBar from './components/ProgressBar';
 import PhaseAccordion from './components/PhaseAccordion';
@@ -15,7 +15,7 @@ import Payments from './components/Payments';
 import PaymentModal from './components/PaymentModal';
 import PinModal from './components/PinModal';
 
-type AppTab = 'progress' | 'payments';
+type AppTab = 'progress' | 'payments' | 'extra-costs';
 
 const MAX_FILE_SIZE_MB = 3;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -78,6 +78,7 @@ const App: React.FC = () => {
   const [projectName, setProjectName] = useState<string>('Acompanhamento de Obra');
   const [phases, setPhases] = useState<Phase[]>([]);
   const [paymentMilestones, setPaymentMilestones] = useState<PaymentMilestone[]>([]);
+  const [extraMilestones, setExtraMilestones] = useState<PaymentMilestone[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [driveFolderPath, setDriveFolderPath] = useState<string>('Minha Obra/Fotos');
 
@@ -85,6 +86,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<AppTab>('progress');
+  const [pendingTab, setPendingTab] = useState<AppTab>('payments');
   const [viewingPhoto, setViewingPhoto] = useState<Photo | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<number | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -111,6 +113,7 @@ const App: React.FC = () => {
             setProjectName(data.projectName || 'Acompanhamento de Obra');
             setPhases(data.phases || INITIAL_PROJECT_PHASES);
             setPaymentMilestones(data.paymentMilestones || INITIAL_PAYMENT_MILESTONES);
+            setExtraMilestones(data.extraMilestones || INITIAL_EXTRA_PAYMENT_MILESTONES);
             setLogs(data.logs || []);
             setDriveFolderPath(data.driveFolderPath || 'Minha Obra/Fotos');
         } catch (err: any) {
@@ -118,6 +121,7 @@ const App: React.FC = () => {
             console.error(err);
             setPhases(INITIAL_PROJECT_PHASES);
             setPaymentMilestones(INITIAL_PAYMENT_MILESTONES);
+            setExtraMilestones(INITIAL_EXTRA_PAYMENT_MILESTONES);
             setLogs([]);
         } finally {
             setIsLoading(false);
@@ -151,6 +155,7 @@ const App: React.FC = () => {
             projectName,
             phases,
             paymentMilestones,
+            extraMilestones,
             logs,
             driveFolderPath
         };
@@ -172,7 +177,7 @@ const App: React.FC = () => {
         setError(err.message);
         setSaveStatus('idle');
     }
-  }, [projectName, phases, paymentMilestones, logs, driveFolderPath]);
+  }, [projectName, phases, paymentMilestones, extraMilestones, logs, driveFolderPath]);
   
   const handleReset = useCallback(async () => {
     if (window.confirm("Tem certeza que deseja reiniciar todo o progresso? Esta ação não pode ser desfeita.")) {
@@ -180,6 +185,7 @@ const App: React.FC = () => {
             projectName: 'Acompanhamento de Obra',
             phases: INITIAL_PROJECT_PHASES,
             paymentMilestones: INITIAL_PAYMENT_MILESTONES,
+            extraMilestones: INITIAL_EXTRA_PAYMENT_MILESTONES,
             logs: [{
                 id: crypto.randomUUID(),
                 timestamp: new Date().toLocaleString('pt-BR'),
@@ -204,6 +210,7 @@ const App: React.FC = () => {
             setProjectName(initialData.projectName);
             setPhases(initialData.phases);
             setPaymentMilestones(initialData.paymentMilestones);
+            setExtraMilestones(initialData.extraMilestones);
             setLogs(initialData.logs);
             setDriveFolderPath(initialData.driveFolderPath);
             addLog('Progresso reiniciado para o estado inicial.');
@@ -436,16 +443,17 @@ const App: React.FC = () => {
             date: new Date().toISOString(),
         };
 
-        const milestoneName = paymentMilestones.find(m => m.id === milestoneId)?.phaseName || '';
+        const listToUpdate = milestoneId >= 1000 ? extraMilestones : paymentMilestones;
+        const milestoneName = listToUpdate.find(m => m.id === milestoneId)?.phaseName || '';
 
-        setPaymentMilestones(prev => 
+        const updateStateFn = (prev: PaymentMilestone[]) => 
             prev.map(m => {
                 if (m.id === milestoneId) {
                     const updatedPayments = [...m.payments, newPayment];
                     const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
                     
                     let newStatus: MilestoneStatus;
-                    if (totalPaid >= m.totalValue) {
+                    if (totalPaid >= m.totalValue - 0.001) {
                         newStatus = MilestoneStatus.Paid;
                     } else if (totalPaid > 0) {
                         newStatus = MilestoneStatus.PartiallyPaid;
@@ -456,8 +464,14 @@ const App: React.FC = () => {
                     return { ...m, payments: updatedPayments, status: newStatus };
                 }
                 return m;
-            })
-        );
+            });
+
+        if (milestoneId >= 1000) {
+            setExtraMilestones(updateStateFn);
+        } else {
+            setPaymentMilestones(updateStateFn);
+        }
+
         addLog(`Pagamento de ${amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} registrado para "${milestoneName}".`);
         setIsPaymentModalOpen(false);
         setPayingMilestone(null);
@@ -467,20 +481,25 @@ const App: React.FC = () => {
         setError(`Falha ao registrar pagamento. Detalhes: ${err.message}`);
     }
 
-  }, [addLog, paymentMilestones, handleSave]);
+  }, [addLog, paymentMilestones, extraMilestones, handleSave]);
 
   const handleDeletePayment = useCallback((milestoneId: number, paymentId: string) => {
     let milestoneName = '';
     let deletedAmount = 0;
 
-    setPaymentMilestones(prev =>
+    const listToSearch = milestoneId >= 1000 ? extraMilestones : paymentMilestones;
+    const targetMilestone = listToSearch.find(m => m.id === milestoneId);
+    if (!targetMilestone) return;
+
+    milestoneName = targetMilestone.phaseName;
+    const paymentToDelete = targetMilestone.payments.find(p => p.id === paymentId);
+    if (!paymentToDelete) return;
+
+    deletedAmount = paymentToDelete.amount;
+
+    const updateStateFn = (prev: PaymentMilestone[]) =>
         prev.map(m => {
             if (m.id === milestoneId) {
-                milestoneName = m.phaseName;
-                const paymentToDelete = m.payments.find(p => p.id === paymentId);
-                if (!paymentToDelete) return m;
-
-                deletedAmount = paymentToDelete.amount;
                 const updatedPayments = m.payments.filter(p => p.id !== paymentId);
                 const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -497,17 +516,21 @@ const App: React.FC = () => {
                 return { ...m, payments: updatedPayments, status: newStatus };
             }
             return m;
-        })
-    );
+        });
 
-    if (milestoneName && deletedAmount > 0) {
-        addLog(`Pagamento de ${deletedAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} removido de "${milestoneName}".`);
-        handleSave(); // Auto-save after successful deletion
+    if (milestoneId >= 1000) {
+        setExtraMilestones(updateStateFn);
+    } else {
+        setPaymentMilestones(updateStateFn);
     }
-  }, [addLog, handleSave]);
+
+    addLog(`Pagamento de ${deletedAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} removido de "${milestoneName}".`);
+    handleSave(); // Auto-save after successful deletion
+  }, [addLog, paymentMilestones, extraMilestones, handleSave]);
 
   const handleTabClick = (tabId: AppTab) => {
-    if (tabId === 'payments' && !isPaymentsUnlocked) {
+    if ((tabId === 'payments' || tabId === 'extra-costs') && !isPaymentsUnlocked) {
+        setPendingTab(tabId);
         setIsPinModalOpen(true);
     } else {
         setActiveTab(tabId);
@@ -516,9 +539,9 @@ const App: React.FC = () => {
 
   const handlePinSuccess = () => {
       setIsPaymentsUnlocked(true);
-      setActiveTab('payments');
+      setActiveTab(pendingTab);
       setIsPinModalOpen(false);
-      addLog('Acesso à aba Financeiro liberado.');
+      addLog('Acesso às abas financeiras liberado.');
   };
 
 
@@ -536,6 +559,7 @@ const App: React.FC = () => {
   const TABS = [
     { id: 'progress', label: 'Andamento da Obra' },
     { id: 'payments', label: 'Financeiro' },
+    { id: 'extra-costs', label: 'Custos Extras' },
   ];
 
   return (
@@ -587,6 +611,15 @@ const App: React.FC = () => {
             {activeTab === 'payments' && (
                 <Payments 
                     milestones={paymentMilestones}
+                    isAdminMode={isAdminMode}
+                    onAddPayment={handleOpenPaymentModal}
+                    onDeletePayment={handleDeletePayment}
+                />
+            )}
+
+            {activeTab === 'extra-costs' && (
+                <Payments 
+                    milestones={extraMilestones}
                     isAdminMode={isAdminMode}
                     onAddPayment={handleOpenPaymentModal}
                     onDeletePayment={handleDeletePayment}

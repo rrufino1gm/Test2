@@ -1,5 +1,5 @@
 import { sql } from '@vercel/postgres';
-import { INITIAL_PROJECT_PHASES, INITIAL_PAYMENT_MILESTONES } from '../constants';
+import { INITIAL_PROJECT_PHASES, INITIAL_PAYMENT_MILESTONES, INITIAL_EXTRA_PAYMENT_MILESTONES } from '../constants';
 
 export const config = {
   runtime: 'edge',
@@ -26,6 +26,7 @@ export default async function handler(request: Request) {
         ],
         driveFolderPath: 'Minha Obra/Fotos',
         paymentMilestones: INITIAL_PAYMENT_MILESTONES,
+        extraMilestones: INITIAL_EXTRA_PAYMENT_MILESTONES,
       };
       await sql`INSERT INTO public.project_data (id, data) VALUES (1, ${JSON.stringify(initialState)});`;
       data = initialState;
