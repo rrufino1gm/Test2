@@ -191,6 +191,22 @@ export const INITIAL_EXTRA_PAYMENT_MILESTONES: PaymentMilestone[] = [
     payments: [],
   },
   {
+    id: 1011,
+    phaseName: 'Fase 5: Disjuntor IDR (adicional, x2)',
+    totalValue: 500.00,
+    condition: 'Fornecimento e instalação de disjuntores IDR adicionais - Melhoria Fase 5',
+    status: MilestoneStatus.Pending,
+    payments: [],
+  },
+  {
+    id: 1012,
+    phaseName: 'Fase 5: Box banheiro (x2_P; x1_M)',
+    totalValue: 0.00,
+    condition: 'Fornecimento e instalação de box de vidro para banheiros - Melhoria Fase 5',
+    status: MilestoneStatus.Pending,
+    payments: [],
+  },
+  {
     id: 1010,
     phaseName: 'Fase 6: Churrasqueira / Área Gourmet (pia + ilha)',
     totalValue: 0.00,

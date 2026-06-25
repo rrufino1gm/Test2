@@ -112,8 +112,25 @@ const App: React.FC = () => {
             const data = await response.json();
             setProjectName(data.projectName || 'Acompanhamento de Obra');
             setPhases(data.phases || INITIAL_PROJECT_PHASES);
-            setPaymentMilestones(data.paymentMilestones || INITIAL_PAYMENT_MILESTONES);
-            setExtraMilestones(data.extraMilestones || INITIAL_EXTRA_PAYMENT_MILESTONES);
+
+            const dbPaymentMilestones = data.paymentMilestones || INITIAL_PAYMENT_MILESTONES;
+            const mergedPaymentMilestones = [
+                ...dbPaymentMilestones,
+                ...INITIAL_PAYMENT_MILESTONES.filter(
+                    initM => !dbPaymentMilestones.some((dbM: any) => dbM.id === initM.id)
+                )
+            ];
+            setPaymentMilestones(mergedPaymentMilestones);
+
+            const dbExtraMilestones = data.extraMilestones || INITIAL_EXTRA_PAYMENT_MILESTONES;
+            const mergedExtraMilestones = [
+                ...dbExtraMilestones,
+                ...INITIAL_EXTRA_PAYMENT_MILESTONES.filter(
+                    initM => !dbExtraMilestones.some((dbM: any) => dbM.id === initM.id)
+                )
+            ];
+            setExtraMilestones(mergedExtraMilestones);
+
             setLogs(data.logs || []);
             setDriveFolderPath(data.driveFolderPath || 'Minha Obra/Fotos');
         } catch (err: any) {
