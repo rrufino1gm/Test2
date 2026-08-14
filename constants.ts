@@ -185,7 +185,7 @@ export const INITIAL_EXTRA_PAYMENT_MILESTONES: PaymentMilestone[] = [
   {
     id: 1009,
     phaseName: 'Fase 5: Revestimento Fachada (pedras; cerâmico)',
-    totalValue: 2600.00,
+    totalValue: 1030.00,
     condition: 'Revestimento estético de pedras/cerâmica na fachada - Melhoria Fase 5',
     status: MilestoneStatus.Pending,
     payments: [],

@@ -122,7 +122,19 @@ const App: React.FC = () => {
             ];
             setPaymentMilestones(mergedPaymentMilestones);
 
-            const dbExtraMilestones = data.extraMilestones || INITIAL_EXTRA_PAYMENT_MILESTONES;
+            const dbExtraMilestones = (data.extraMilestones || INITIAL_EXTRA_PAYMENT_MILESTONES).map((m: PaymentMilestone) => {
+                if (m.id === 1009 && m.totalValue === 2600.00) {
+                    const totalPaid = (m.payments || []).reduce((sum, p) => sum + p.amount, 0);
+                    let newStatus = MilestoneStatus.Pending;
+                    if (totalPaid >= 1030 - 0.001 && totalPaid > 0) {
+                        newStatus = MilestoneStatus.Paid;
+                    } else if (totalPaid > 0) {
+                        newStatus = MilestoneStatus.PartiallyPaid;
+                    }
+                    return { ...m, totalValue: 1030.00, status: newStatus };
+                }
+                return m;
+            });
             const mergedExtraMilestones = [
                 ...dbExtraMilestones,
                 ...INITIAL_EXTRA_PAYMENT_MILESTONES.filter(
